@@ -1,132 +1,92 @@
-from flask import Flask, request, jsonify, abort
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 import json
 import os
 
 app = Flask(__name__)
-CORS(app)
+CORS(app)  # Autoriser les requêtes cross-origin (utile pour ouvrir les HTML localement)
 
-DATA_FILE = 'projects.json'
-ADMIN_PASSWORD = '1002'
+PROJECTS_FILE = 'projects.json'
+ADMIN_PASSWORD = '1002'  # Change ici ton mot de passe admin sécurisé
 
+# Charge ou crée la liste de projets
 def load_projects():
-    if not os.path.exists(DATA_FILE):
+    if not os.path.exists(PROJECTS_FILE):
         return []
-    with open(DATA_FILE, 'r', encoding='utf-8') as f:
-        return json.load(f)
+    with open(PROJECTS_FILE, 'r', encoding='utf-8') as f:
+        try:
+            return json.load(f)
+        except json.JSONDecodeError:
+            return []
 
 def save_projects(projects):
-    with open(DATA_FILE, 'w', encoding='utf-8') as f:
+    with open(PROJECTS_FILE, 'w', encoding='utf-8') as f:
         json.dump(projects, f, indent=2, ensure_ascii=False)
 
 @app.route('/projects', methods=['GET'])
 def get_projects():
     projects = load_projects()
-    return jsonify(projects)
+    return jsonify(projects), 200
 
 @app.route('/projects', methods=['POST'])
 def add_project():
-    data = request.json
-    if not data:
-        abort(400, "No data received")
+    try:
+        data = request.get_json()
+        if not data:
+            return "Requête JSON invalide", 400
 
-    if data.get('password') != ADMIN_PASSWORD:
-        abort(403, "Wrong password")
+        # Vérifier mot de passe
+        if data.get('password') != ADMIN_PASSWORD:
+            return "Mot de passe invalide", 403
 
-    project = {
-        'name': data.get('name', '').strip(),
-        'url': data.get('url', '').strip(),
-        'source': data.get('source', '').strip(),
-        'desc': data.get('desc', '').strip()
-    }
+        # Validation basique
+        name = data.get('name', '').strip()
+        url = data.get('url', '').strip()
+        if not name or not url:
+            return "Nom et URL obligatoires", 400
 
-    if not project['name'] or not project['url']:
-        abort(400, "Name and URL are required")
+        source = data.get('source', '').strip() or None
+        desc = data.get('desc', '').strip() or None
 
-    projects = load_projects()
-    projects.append(project)
-    save_projects(projects)
-    return jsonify({'status': 'ok'})
+        projects = load_projects()
+        projects.append({
+            'name': name,
+            'url': url,
+            'source': source,
+            'desc': desc
+        })
+        save_projects(projects)
+        return "Projet ajouté", 201
 
-@app.route('/projects/<int:index>', methods=['DELETE'])
-def delete_project(index):
-    data = request.json
-    if not data or data.get('password') != ADMIN_PASSWORD:
-        abort(403, "Wrong password")
+    except Exception as e:
+        print(f"Erreur add_project: {e}")
+        return "Erreur serveur lors de l'ajout", 500
 
-    projects = load_projects()
-    if index < 0 or index >= len(projects):
-        abort(404, "Project not found")
+@app.route('/projects', methods=['DELETE'])
+def delete_project():
+    try:
+        data = request.get_json()
+        if not data:
+            return "Requête JSON invalide", 400
 
-    projects.pop(index)
-    save_projects(projects)
-    return jsonify({'status': 'ok'})
+        if data.get('password') != ADMIN_PASSWORD:
+            return "Mot de passe invalide", 403
 
-if __name__ == '__main__':
-    app.run(debug=True)
-from flask import Flask, request, jsonify, abort
-from flask_cors import CORS
-import json
-import os
+        index = data.get('index')
+        if index is None or not isinstance(index, int):
+            return "Index invalide", 400
 
-app = Flask(__name__)
-CORS(app)
+        projects = load_projects()
+        if index < 0 or index >= len(projects):
+            return "Index hors limites", 400
 
-DATA_FILE = 'projects.json'
-ADMIN_PASSWORD = '1002'
+        del projects[index]
+        save_projects(projects)
+        return "Projet supprimé", 200
 
-def load_projects():
-    if not os.path.exists(DATA_FILE):
-        return []
-    with open(DATA_FILE, 'r', encoding='utf-8') as f:
-        return json.load(f)
-
-def save_projects(projects):
-    with open(DATA_FILE, 'w', encoding='utf-8') as f:
-        json.dump(projects, f, indent=2, ensure_ascii=False)
-
-@app.route('/projects', methods=['GET'])
-def get_projects():
-    projects = load_projects()
-    return jsonify(projects)
-
-@app.route('/projects', methods=['POST'])
-def add_project():
-    data = request.json
-    if not data:
-        abort(400, "No data received")
-
-    if data.get('password') != ADMIN_PASSWORD:
-        abort(403, "Wrong password")
-
-    project = {
-        'name': data.get('name', '').strip(),
-        'url': data.get('url', '').strip(),
-        'source': data.get('source', '').strip(),
-        'desc': data.get('desc', '').strip()
-    }
-
-    if not project['name'] or not project['url']:
-        abort(400, "Name and URL are required")
-
-    projects = load_projects()
-    projects.append(project)
-    save_projects(projects)
-    return jsonify({'status': 'ok'})
-
-@app.route('/projects/<int:index>', methods=['DELETE'])
-def delete_project(index):
-    data = request.json
-    if not data or data.get('password') != ADMIN_PASSWORD:
-        abort(403, "Wrong password")
-
-    projects = load_projects()
-    if index < 0 or index >= len(projects):
-        abort(404, "Project not found")
-
-    projects.pop(index)
-    save_projects(projects)
-    return jsonify({'status': 'ok'})
+    except Exception as e:
+        print(f"Erreur delete_project: {e}")
+        return "Erreur serveur lors de la suppression", 500
 
 if __name__ == '__main__':
     app.run(debug=True)
