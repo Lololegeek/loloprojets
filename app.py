@@ -56,5 +56,5 @@ def delete_project(index):
         return jsonify({"error": "Index invalide"}), 400
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(debug=True, port=port)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=True)
+
